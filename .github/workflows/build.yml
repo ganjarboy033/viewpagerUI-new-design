@@ -28,9 +28,6 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
-      - name: 📱 Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: 🔑 Ensure Debug Keystore Exists
         run: |
           if [ ! -f debug.keystore ]; then
@@ -47,13 +44,11 @@ jobs:
         id: gradle_build
         run: |
           echo "Starting Gradle build for assembleDebug..."
-          # Jalankan gradlew dan alirkan output ke gradle-build.log tanpa menghentikan bash secara mendadak saat error
           set +e
           ./gradlew assembleDebug --stacktrace --info 2>&1 | tee gradle-build.log
           GRADLE_EXIT_CODE=${PIPESTATUS[0]}
           set -e
           
-          # Evaluasi hasil build gradle
           if [ $GRADLE_EXIT_CODE -ne 0 ]; then
             echo "Gradle build failed with exit code $GRADLE_EXIT_CODE"
             exit $GRADLE_EXIT_CODE
@@ -73,33 +68,60 @@ jobs:
         if: success()
         run: |
           APK_SIZE=$(ls -lh app/build/outputs/apk/debug/app-debug.apk | awk '{print $5}')
-          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          cat << EOF >> $GITHUB_STEP_SUMMARY
           ## 🎉 Build Berhasil! (APK Ready)
 
           APK berhasil dikompilasi tanpa kesalahan! Anda dapat mengunduh APK langsung dari bagian **Artifacts** di atas.
 
           ### 📊 Detail Hasil Build:
-          - **File:** `app-debug.apk`
+          - **File:** \`app-debug.apk\`
           - **Ukuran:** $APK_SIZE
-          - **Target SDK:** 36
           - **JDK:** Java 21 (Temurin)
           - **Status:** ✅ Passed
 
           Untuk menginstal di ponsel Android:
-          1. Unduh artifact `ViewPager-UI-debug-apk.zip` dari run GitHub Actions ini.
-          2. Ekstrak file zip untuk mendapatkan `app-debug.apk`.
+          1. Unduh artifact \`ViewPager-UI-debug-apk.zip\` dari run GitHub Actions ini.
+          2. Ekstrak file zip untuk mendapatkan \`app-debug.apk\`.
           3. Pasang di perangkat Android (izinkan Install Unknown Apps jika diminta).
           EOF
-          sed -i "s/\$APK_SIZE/$APK_SIZE/g" $GITHUB_STEP_SUMMARY
 
       - name: 🚨 Capture Build Errors & Diagnostics
         if: failure()
         run: |
-          echo "## ❌ Build Gagal - Laporan Diagnostik & Error Log" >> $GITHUB_STEP_SUMMARY
-          echo "Silakan salin blok keterangan error di bawah ini untuk langsung dianalisis dan diperbaiki:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## ❌ Build Gagal - Laporan Diagnostik & Error Log"
+            echo "Silakan salin blok keterangan error di bawah ini untuk langsung dianalisis dan diperbaiki:"
+            echo ""
+            echo "### 📋 Ringkasan Kesalahan (Error Extract):"
+            echo '```text'
+            if [ -f gradle-build.log ]; then
+              grep -E -C 3 '(FAILURE|BUILD FAILED|e: file|Exception|Unresolved reference|Compilation error)' gradle-build.log | head -n 120 || tail -n 60 gradle-build.log
+            else
+              echo "File gradle-build.log tidak ditemukan."
+            fi
+            echo '```'
+            echo ""
+            echo "### 🔍 50 Baris Terakhir dari Build Log:"
+            echo '```text'
+            if [ -f gradle-build.log ]; then
+              tail -n 50 gradle-build.log
+            fi
+            echo '```'
+            echo ""
+            echo "### 💡 Panduan Debug Cepat:"
+            echo "- **Unresolved reference / Symbol not found:** Periksa import package di file Kotlin yang bersangkutan."
+            echo "- **Memory / GC Thrashing:** Pastikan \`gradle.properties\` memiliki \`org.gradle.jvmargs=-Xmx2048m\`."
+            echo "- **Keystore error:** Pastikan \`debug.keystore\` ada di root atau step generate keystore berhasil dijalankan."
+            echo "- **Java Version Mismatch:** Proyek ini dikonfigurasi untuk Java 21."
+          } >> $GITHUB_STEP_SUMMARY
 
-          echo "### 📋 Ringkasan Kesalahan (Error Extract):" >> $GITHUB_STEP_SUMMARY
-          echo '```text' >> $GITHUB_STEP_SUMMARY
-          if [ -f gradle-build.log ]; then
-            grep -E -C 3 '(FAILURE|BUILD F
+      - name: 📁 Upload Build Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-failure-logs
+          path: |
+            gradle-build.log
+            app/build/reports/
+          if-no-files-found: ignore
+          retention-days: 7
