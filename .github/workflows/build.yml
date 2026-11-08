@@ -1,4 +1,4 @@
-name: Build Android APK
+Name: Build Android APK
 
 on:
   push:
@@ -47,7 +47,17 @@ jobs:
         id: gradle_build
         run: |
           echo "Starting Gradle build for assembleDebug..."
+          # Jalankan gradlew dan alirkan output ke gradle-build.log tanpa menghentikan bash secara mendadak saat error
+          set +e
           ./gradlew assembleDebug --stacktrace --info 2>&1 | tee gradle-build.log
+          GRADLE_EXIT_CODE=${PIPESTATUS[0]}
+          set -e
+          
+          # Evaluasi hasil build gradle
+          if [ $GRADLE_EXIT_CODE -ne 0 ]; then
+            echo "Gradle build failed with exit code $GRADLE_EXIT_CODE"
+            exit $GRADLE_EXIT_CODE
+          fi
         shell: bash
 
       - name: 📦 Upload Debug APK Artifact
@@ -64,16 +74,16 @@ jobs:
         run: |
           APK_SIZE=$(ls -lh app/build/outputs/apk/debug/app-debug.apk | awk '{print $5}')
           cat << 'EOF' >> $GITHUB_STEP_SUMMARY
-          ##  Build Berhasil! (APK Ready)
+          ## 🎉 Build Berhasil! (APK Ready)
 
           APK berhasil dikompilasi tanpa kesalahan! Anda dapat mengunduh APK langsung dari bagian **Artifacts** di atas.
 
-          ###  Detail Hasil Build:
+          ### 📊 Detail Hasil Build:
           - **File:** `app-debug.apk`
           - **Ukuran:** $APK_SIZE
           - **Target SDK:** 36
           - **JDK:** Java 21 (Temurin)
-          - **Status:**  Passed
+          - **Status:** ✅ Passed
 
           Untuk menginstal di ponsel Android:
           1. Unduh artifact `ViewPager-UI-debug-apk.zip` dari run GitHub Actions ini.
@@ -92,37 +102,4 @@ jobs:
           echo "### 📋 Ringkasan Kesalahan (Error Extract):" >> $GITHUB_STEP_SUMMARY
           echo '```text' >> $GITHUB_STEP_SUMMARY
           if [ -f gradle-build.log ]; then
-            # Extract common Gradle/Kotlin errors, stacktraces and failures
-            grep -E -C 3 '(FAILURE|BUILD FAILED|e: file|Exception|Unresolved reference|Compilation error)' gradle-build.log | head -n 120 >> $GITHUB_STEP_SUMMARY || tail -n 60 gradle-build.log >> $GITHUB_STEP_SUMMARY
-          else
-            echo "File gradle-build.log tidak ditemukan." >> $GITHUB_STEP_SUMMARY
-          fi
-          echo '```' >> $GITHUB_STEP_SUMMARY
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🔍 50 Baris Terakhir dari Build Log:" >> $GITHUB_STEP_SUMMARY
-          echo '```text' >> $GITHUB_STEP_SUMMARY
-          if [ -f gradle-build.log ]; then
-            tail -n 50 gradle-build.log >> $GITHUB_STEP_SUMMARY
-          fi
-          echo '```' >> $GITHUB_STEP_SUMMARY
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
-          ### 💡 Panduan Debug Cepat:
-          - **Unresolved reference / Symbol not found:** Periksa import package di file Kotlin yang bersangkutan.
-          - **Memory / GC Thrashing:** Pastikan `gradle.properties` memiliki `org.gradle.jvmargs=-Xmx2048m`.
-          - **Keystore error:** Pastikan `debug.keystore` ada di root atau step generate keystore berhasil dijalankan.
-          - **Java Version Mismatch:** Proyek ini dikonfigurasi untuk Java 21.
-          EOF
-
-      - name: 📁 Upload Build Logs on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-failure-logs
-          path: |
-            gradle-build.log
-            app/build/reports/
-          if-no-files-found: ignore
-          retention-days: 7
+            grep -E -C 3 '(FAILURE|BUILD F
