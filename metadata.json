@@ -1,0 +1,8 @@
+{
+  "name": "ViewPager UI",
+  "description": "Showcase of smooth ViewPager transformer animations and transitions in Jetpack Compose",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
